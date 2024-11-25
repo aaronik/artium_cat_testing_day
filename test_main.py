@@ -84,7 +84,6 @@ def test_assert_llm_asks_user_if_they_would_like_a_summary_checklist():
 Revised Prompt: Develop a training module for intermediate-level coders familiar with PyCharm but new to GitHub Copilot. The module will focus on Python development, including step-by-step integration and setup of Copilot within PyCharm, key features, and practical usage tips. Include hands-on exercises involving algorithms and data structures coding challenges. Use visual aids such as screenshots and examples to enhance understanding. Provide guidance on evaluating Copilot's generated code for correctness and functionality, with a focus on practical application.
 
 Next Question: Would you like the module to end with a summary or checklist of best practices for using GitHub Copilot effectively?
-Next Question: Would you like a summary or checklist at the end describing how to use GitHub Copilot effectively?
 """
 
     # split raw response by sentence
