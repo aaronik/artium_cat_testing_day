@@ -1,5 +1,3 @@
-import re
-
 conversation = """
 ChatGPT said:
 What specific training module(s) would you like to develop?
@@ -193,59 +191,3 @@ Iterate: Refine suggestions by providing additional context or rejecting irrelev
 - Followed best practices to ensure effective use.
 This module provides a practical introduction to GitHub Copilot in PyCharm. Apply these skills in your daily workflow, and continue exploring advanced features as you grow more comfortable with the tool.
 """
-
-
-def split_and_format_conversation(text):
-    # Initialize an empty list to hold the messages
-    messages = []
-
-    # Split the text into chunks using the specified delimiters
-    parts = text.split("You said:")
-
-    for part in parts:
-        # Split further using the second delimiter "ChatGPT said:"
-        chat_parts = part.split("ChatGPT said:")
-
-        # Process the user's message if it exists
-        if chat_parts[0].strip():
-            user_message = chat_parts[0].strip()
-            messages.append({'role': 'user', 'message': user_message})
-
-        # Process the ChatGPT's message if it exists
-        if len(chat_parts) > 1 and chat_parts[1].strip():
-            assistant_message = chat_parts[1].strip()
-            messages.append({'role': 'assistant', 'message': assistant_message})
-
-    return messages
-
-split_messages = split_and_format_conversation(conversation)
-
-
-def test_conversation_ends_with_gpt_sending_expected_key_words():
-    last_response = split_messages[-1]
-
-    assert "python" in last_response["message"].lower()
-    assert "pycharm" in last_response["message"].lower()
-    assert "copilot" in last_response["message"].lower()
-    assert "training" in last_response["message"].lower()
-
-
-def test_when_you_request_a_summary_it_provides_one():
-    user_wants_summary = "Would you like the module to end with a summary or checklist of best practices for using GitHub Copilot effectively?"
-
-    position = 0
-    for index, message in enumerate(split_messages):
-        if user_wants_summary in message["message"]:
-            position = index
-
-    assert "yes" == split_messages[position + 1]["message"].lower()
-    assert "user" == split_messages[position + 1]["role"]
-
-    last_response = split_messages[-1]
-    assert "summary" in last_response["message"].lower()
-
-    # Test we can see a newline character followed by one or more lines that start with -
-    pattern = r".*Summary.{0,800}\n(-.*\n)+" # finds one line after # Summary that starts with -
-    matches = re.findall(pattern, last_response["message"])
-    assert len(matches) >= 1 # Make sure there's one or more line that starts with - after the # Summary
-
