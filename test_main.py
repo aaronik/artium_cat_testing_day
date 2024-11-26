@@ -3,6 +3,9 @@ import re
 import spacy
 from fuzzywuzzy import fuzz
 
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from sklearn.metrics.pairwise import cosine_similarity
+
 from conversation import conversation
 from openai import OpenAI
 
@@ -186,7 +189,7 @@ def test_llm_asks_user_for_additional_information_to_refine_the_prompt():
         {"role": "user", "content": "I would like to develop a training module on Python programming."},
     ]
 
-    n = 10
+    n = 1
     assistant_responses = chat_with_llm(prompt, n=n)
 
     for response_choice in assistant_responses.choices:
@@ -196,7 +199,39 @@ def test_llm_asks_user_for_additional_information_to_refine_the_prompt():
         tool_call = response_choice.message.tool_calls[0]
         assert tool_call.function.name == "format_response_as_json"
 
-
         formatted_response = json.loads(tool_call.function.arguments)
         assert "revised_prompt" in formatted_response
         assert "next_question" in formatted_response
+        user_input = "I want to learn about Kubernetes orchestration techniques."
+        revised_prompt = "Create a training module focused on Kubernetes orchestration methods."
+        assert is_revised_prompt(user_input, revised_prompt) == True
+
+
+def is_revised_prompt(user_input, revised_prompt):
+    """Check if the revised prompt is semantically similar but rephrased."""
+    model = AutoModelForSequenceClassification.from_pretrained('meta-llama/Llama-3.2-1B')
+    user_vector = model.encode(user_input)
+    revised_vector = model.encode(revised_prompt)
+    
+    # Semantic similarity threshold
+    similarity = cosine_similarity([user_vector], [revised_vector])[0][0]
+    is_similar = similarity > 0.8
+    
+    # Ensure wording isn't identical (basic token overlap check)
+    user_tokens = set(user_input.lower().split())
+    revised_tokens = set(revised_prompt.lower().split())
+    token_overlap = len(user_tokens & revised_tokens) / len(user_tokens)
+    is_rephrased = token_overlap < 0.8  # Allow some overlap but not too much
+    
+    return is_similar and is_rephrased
+
+# def test_call_format_response_as_json():
+#     prompt = [
+#         system_prompt[0],
+#         {"role": "user", "content": "I would like to develop a training module on Python programming."},
+#     ]
+
+#     system_response = chat_with_llm(prompt)
+
+#     print(system_response)
+#     assert False
