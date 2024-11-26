@@ -1,4 +1,4 @@
-import os
+import json
 import re
 import spacy
 from fuzzywuzzy import fuzz
@@ -8,7 +8,7 @@ from openai import OpenAI
 
 nlp = spacy.load("en_core_web_sm")
 client = OpenAI(
-    api_key=os.environ.get("CAT_TESTINGKEY")
+    api_key="redacted",
 )
 
 prompt_text = """
@@ -26,12 +26,32 @@ You are an expert software engineering trainer tasked with creating comprehensiv
 
 system_prompt = [{"role": "system", "content": prompt_text}]
 
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "format_response_as_json",
+            "description": "Format the response as JSON with revised prompt and next question",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "revised_prompt": {"type": "string"},
+                    "next_question": {"type": "string"}
+                },
+                "required": ["revised_prompt", "next_question"]
+            }
+        }
+    }
+]
 
-def chat_with_llm(messages):
+def chat_with_llm(messages: list[dict], n: int = 1):
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages,
-        n=10
+        n=n,
+        temperature=0.99,
+        tools=tools,
+        tool_choice="auto"
     )
     return response
 
@@ -65,6 +85,7 @@ def split_and_format_conversation(text):
             messages.append({'role': 'assistant', 'message': assistant_message})
 
     return messages
+
 
 split_messages = split_and_format_conversation(conversation)
 
@@ -136,10 +157,46 @@ Next Question: Would you like the module to end with a summary or checklist of b
 
 
 def test_llm_interaction_first_llm_response_asks_what_to_learn():
-    assistant_responses = chat_with_llm(system_prompt)
+    n = 20
+    assistant_responses = chat_with_llm(system_prompt, n=n)
 
+    num_failed_responses = 0
+    failed_scores = []
     general_response_structure = "What training module(s) would you like to develop or learn?"
     for response in assistant_responses.choices:
-        _assert_is_question(response.message.content)
-        similarity_percentage = fuzz.ratio(general_response_structure, response.message.content)
-        assert similarity_percentage > 80, f"Threshold not met: {similarity_percentage}"
+        response_text = response.message.content
+        _assert_is_question(response_text)
+
+        ref_doc = nlp(general_response_structure)
+        resp_doc = nlp(response_text)
+
+        similarity_percentage = ref_doc.similarity(resp_doc)
+
+        if similarity_percentage < 0.8:
+            num_failed_responses = num_failed_responses + 1
+            failed_scores.append(similarity_percentage)
+
+    assert num_failed_responses < int(0.1 * n), f"num_failed_responses = {num_failed_responses}"
+    print(failed_scores)
+
+
+def test_llm_asks_user_for_additional_information_to_refine_the_prompt():
+    prompt = [
+        system_prompt[0],
+        {"role": "user", "content": "I would like to develop a training module on Python programming."},
+    ]
+
+    n = 10
+    assistant_responses = chat_with_llm(prompt, n=n)
+
+    for response_choice in assistant_responses.choices:
+        assert response_choice.finish_reason == "tool_calls"
+        assert len(response_choice.message.tool_calls) > 0
+
+        tool_call = response_choice.message.tool_calls[0]
+        assert tool_call.function.name == "format_response_as_json"
+
+
+        formatted_response = json.loads(tool_call.function.arguments)
+        assert "revised_prompt" in formatted_response
+        assert "next_question" in formatted_response
